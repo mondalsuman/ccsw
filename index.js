@@ -204,6 +204,7 @@ program
             };
 
             Object.assign(settings.env, newSettings);
+            settings.model = "eu.anthropic.claude-opus-4-5-20251101-v1:0";
 
             await fs.writeJson(settingsFile, settings, { spaces: 2 });
             console.log('Created/Updated .claude/settings.json with Bedrock settings');
@@ -259,6 +260,9 @@ program
                     delete settings.env;
                 }
             }
+
+            // Remove model setting
+            delete settings.model;
 
             if (Object.keys(settings).length === 0) {
                 await fs.remove(settingsFile);
