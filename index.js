@@ -31,7 +31,7 @@ async function saveConfig(config) {
 
 program
     .name('ccsw')
-    .description('CLI to manage GLM API keys and configure VS Code settings for Anthropic support via GLM')
+    .description('CLI to manage GLM and AWS Bedrock settings for Claude Code')
     .version('1.0.0');
 
 program
@@ -88,7 +88,8 @@ program
                 "API_TIMEOUT_MS": "3000000",
                 "ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-4.7",
                 "ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-4.7",
-                "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-4.5-air"
+                "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-4.5-air",
+                "IS_DEMO": "true"
             };
 
             Object.assign(settings.env, newSettings);
@@ -140,7 +141,8 @@ program
                     "API_TIMEOUT_MS",
                     "ANTHROPIC_DEFAULT_SONNET_MODEL",
                     "ANTHROPIC_DEFAULT_OPUS_MODEL",
-                    "ANTHROPIC_DEFAULT_HAIKU_MODEL"
+                    "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+                    "IS_DEMO"
                 ];
 
                 keysToRemove.forEach(key => delete settings.env[key]);
@@ -166,6 +168,108 @@ program
 
         } catch (error) {
             console.error('Error running glm-off:', error.message);
+        }
+    });
+
+program
+    .command('bedrock-on')
+    .description('Configure settings.json for AWS Bedrock support')
+    .option('-p, --profile <name>', 'AWS profile name (default: sjmbrprofile)')
+    .option('-r, --region <region>', 'AWS region (default: eu-west-1)')
+    .action(async (options) => {
+        try {
+            const claudeDir = path.join(process.cwd(), '.claude');
+            const settingsFile = path.join(claudeDir, 'settings.json');
+
+            await fs.ensureDir(claudeDir);
+
+            let settings = {};
+            if (await fs.pathExists(settingsFile)) {
+                try {
+                    settings = await fs.readJson(settingsFile);
+                } catch (e) {
+                    settings = {};
+                }
+            }
+
+            if (!settings.env) {
+                settings.env = {};
+            }
+
+            const newSettings = {
+                "CLAUDE_CODE_USE_BEDROCK": "1",
+                "AWS_PROFILE": options.profile || "sjmbrprofile",
+                "AWS_REGION": options.region || "eu-west-1",
+                "IS_DEMO": "true"
+            };
+
+            Object.assign(settings.env, newSettings);
+
+            await fs.writeJson(settingsFile, settings, { spaces: 2 });
+            console.log('Created/Updated .claude/settings.json with Bedrock settings');
+
+            // Add to .gitignore
+            const gitignoreFile = path.join(process.cwd(), '.gitignore');
+            const gitignoreEntry = '.claude/settings.json';
+
+            let gitignoreContent = '';
+            if (await fs.pathExists(gitignoreFile)) {
+                gitignoreContent = await fs.readFile(gitignoreFile, 'utf8');
+            }
+
+            if (!gitignoreContent.includes(gitignoreEntry)) {
+                const separator = gitignoreContent.length > 0 && !gitignoreContent.endsWith('\n') ? '\n' : '';
+                await fs.appendFile(gitignoreFile, `${separator}${gitignoreEntry}\n`);
+                console.log('Added .claude/settings.json to .gitignore');
+            } else {
+                console.log('.claude/settings.json already in .gitignore');
+            }
+
+        } catch (error) {
+            console.error('Error running bedrock-on:', error.message);
+        }
+    });
+
+program
+    .command('bedrock-off')
+    .description('Remove AWS Bedrock configuration')
+    .action(async () => {
+        try {
+            const claudeDir = path.join(process.cwd(), '.claude');
+            const settingsFile = path.join(claudeDir, 'settings.json');
+
+            if (!await fs.pathExists(settingsFile)) {
+                console.log('.claude/settings.json does not exist. Nothing to do.');
+                return;
+            }
+
+            let settings = await fs.readJson(settingsFile);
+
+            if (settings.env) {
+                const keysToRemove = [
+                    "CLAUDE_CODE_USE_BEDROCK",
+                    "AWS_PROFILE",
+                    "AWS_REGION",
+                    "IS_DEMO"
+                ];
+
+                keysToRemove.forEach(key => delete settings.env[key]);
+
+                if (Object.keys(settings.env).length === 0) {
+                    delete settings.env;
+                }
+            }
+
+            if (Object.keys(settings).length === 0) {
+                await fs.remove(settingsFile);
+                console.log('Removed .claude/settings.json as it became empty.');
+            } else {
+                await fs.writeJson(settingsFile, settings, { spaces: 2 });
+                console.log('Updated .claude/settings.json (removed Bedrock keys).');
+            }
+
+        } catch (error) {
+            console.error('Error running bedrock-off:', error.message);
         }
     });
 
